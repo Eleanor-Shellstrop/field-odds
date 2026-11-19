@@ -1,0 +1,5 @@
+[
+  {"sciName": "Corvus brachyrhynchos", "comName": "American Crow", "speciesCode": "amecro", "category": "species", "taxonOrder": 21180.0, "familyComName": "Crows, Jays, and Magpies"},
+  {"sciName": "Haliaeetus leucocephalus", "comName": "Bald Eagle", "speciesCode": "baleag", "category": "species", "taxonOrder": 8270.0, "familyComName": "Hawks, Eagles, and Kites"},
+  {"sciName": "Larinae sp.", "comName": "gull sp.", "speciesCode": "gulls", "category": "spuh", "taxonOrder": 5730.0, "familyComName": "Gulls, Terns, and Skimmers"}
+]

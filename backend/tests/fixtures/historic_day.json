@@ -1,0 +1,46 @@
+[
+  {
+    "speciesCode": "amecro",
+    "comName": "American Crow",
+    "sciName": "Corvus brachyrhynchos",
+    "locId": "L123456",
+    "locName": "Discovery Park",
+    "obsDt": "2026-11-18 08:15",
+    "howMany": 12,
+    "lat": 47.6573,
+    "lng": -122.4057,
+    "obsValid": true,
+    "obsReviewed": false,
+    "locationPrivate": false,
+    "subId": "S200000001"
+  },
+  {
+    "speciesCode": "baleag",
+    "comName": "Bald Eagle",
+    "sciName": "Haliaeetus leucocephalus",
+    "locId": "L123456",
+    "locName": "Discovery Park",
+    "obsDt": "2026-11-18 09:02",
+    "howMany": 1,
+    "lat": 47.6573,
+    "lng": -122.4057,
+    "obsValid": true,
+    "obsReviewed": false,
+    "locationPrivate": false,
+    "subId": "S200000001"
+  },
+  {
+    "speciesCode": "gulls",
+    "comName": "gull sp.",
+    "sciName": "Larinae sp.",
+    "locId": "L765432",
+    "locName": "Alki Beach",
+    "obsDt": "2026-11-18",
+    "lat": 47.5810,
+    "lng": -122.4090,
+    "obsValid": true,
+    "obsReviewed": false,
+    "locationPrivate": false,
+    "subId": "S200000002"
+  }
+]

@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fieldodds}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fieldodds}
+      POSTGRES_DB: ${POSTGRES_DB:-fieldodds}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fieldodds}"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: &env-file
+      - path: .env
+        required: false  # optional; secrets can come from your shell instead
+    environment: &backend-env
+      # Taken from your shell (e.g. `export EBIRD_API_KEY=...` in ~/.zshrc), else from .env
+      EBIRD_API_KEY: ${EBIRD_API_KEY:-}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fieldodds}:${POSTGRES_PASSWORD:-fieldodds}@db:5432/${POSTGRES_DB:-fieldodds}
+    command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    env_file: *env-file
+    environment: *backend-env
+    command: python -m app.worker
+    depends_on:
+      api:
+        condition: service_started  # api runs the migrations
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
