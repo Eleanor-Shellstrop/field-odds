@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterLink, RouterView } from 'vue-router'
 </script>
 
 <template>
   <div class="shell">
-    <nav class="brand">
-      Field Odds
+    <nav class="nav">
+      <span class="brand">Field Odds</span>
+      <RouterLink to="/">
+        Today
+      </RouterLink>
+      <RouterLink to="/rarities">
+        Rarities now
+      </RouterLink>
     </nav>
     <main>
       <RouterView />
@@ -56,6 +62,9 @@ a { color: var(--accent); }
 
 <style scoped>
 .shell { max-width: 48rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-.brand { font-weight: 700; letter-spacing: 0.02em; color: var(--accent); margin-bottom: 1.5rem; }
+.nav { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem; margin-bottom: 1.5rem; }
+.brand { font-weight: 700; letter-spacing: 0.02em; color: var(--accent); margin-right: auto; }
+.nav a { color: var(--muted); font-size: 0.9rem; text-decoration: none; }
+.nav a.router-link-active { color: var(--accent); font-weight: 600; }
 footer { margin-top: 3rem; font-size: 0.8rem; color: var(--muted); }
 </style>

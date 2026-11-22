@@ -20,6 +20,9 @@ class EBirdObservation(_EBirdModel):
     lat: float | None = None
     lng: float | None = None
     sub_id: str = Field(alias="subId")
+    # Absent means not yet reviewed, never accepted
+    is_valid: bool = Field(default=False, alias="obsValid")
+    is_reviewed: bool = Field(default=False, alias="obsReviewed")
     location_private: bool = Field(default=True, alias="locationPrivate")  # fail closed
 
     @field_validator("obs_dt", mode="before")

@@ -21,11 +21,16 @@ class Settings(BaseSettings):
     tz: str = "America/Los_Angeles"
     database_url: str = "sqlite:///./fieldodds.db"
 
-    # Once a day, at or after this local hour. The default pipeline is one API call.
+    # Once a day, at or after this local hour. With the extra rarity refresh below, the
+    # default pipeline makes 4 API calls a day (plus 1 per missed day of checklist counts).
     # compute_predictions is local: it reads the imported checklist frequencies and never
     # recent sightings, which can't say how many checklists missed a bird.
     schedule_hour: int = Field(default=6, ge=0, le=23)
-    pipeline_jobs: list[str] = Field(default=["recent_obs", "compute_predictions"])
+    pipeline_jobs: list[str] = Field(
+        default=["recent_obs", "notable_obs", "checklist_effort", "compute_predictions"]
+    )
+    # Second rarity pull, in time for a lunch-break chase
+    rarity_refresh_hour: int = Field(default=11, ge=0, le=23)
 
     # Likelihood model v1 knobs
     model_years: int = 3

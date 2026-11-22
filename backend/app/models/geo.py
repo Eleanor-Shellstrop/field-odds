@@ -15,6 +15,7 @@ class Location(Base):
     is_private: Mapped[bool] = mapped_column(default=True, server_default=true())
     lat: Mapped[float | None]
     lng: Mapped[float | None]
+    public_name: Mapped[str | None] = mapped_column(String(300))  # only set for hotspots
     area_name: Mapped[str | None] = mapped_column(String(200))  # only set for private locations
 
 

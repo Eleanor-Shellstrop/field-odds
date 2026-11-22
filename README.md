@@ -18,20 +18,26 @@ Field Odds pulls data from the [eBird API 2.0](https://documenter.getpostman.com
 flowchart LR
     eBird[(eBird API)] -->|httpx + retries| Jobs
     subgraph worker [worker: once a day, with catch-up]
-        Jobs[recent_obs: one API call → compute_predictions: local]
+        Jobs[recent_obs, notable_obs twice, checklist_effort → compute_predictions: local]
     end
     Jobs -->|raw JSON| Raw[(raw_responses)]
     Jobs -->|transform/load| Obs[(observations, daily_stats, species)]
     Hist[eBird bar chart file] -->|make histogram| Freq[(checklist_frequencies)]
     Freq --> Model[LikelihoodModel]
     Obs -->|last reported| API
+    Jobs --> Notable[(notable_reports)]
+    Notable -->|episodes + effort| API
     Model --> Pred[(predictions)]
     Pred --> API[FastAPI]
     API --> Web[Vue + Pinia]
 ```
 
 - The **worker and API are separate processes.** Jobs contain no scheduling code, so APScheduler can be swapped for Celery beat, Prefect or a cloud cron without touching them.
-- **The API is for recent sightings only.** Once a day, one call fetches the last 7 days, which picks up checklists submitted late. If the machine was off or asleep, the pull runs at the next chance. A failed pull gets at most 3 attempts a day, an hour apart.
+- **The API is for recent data only, at 4 calls a day:**
+  - recent sightings for the last 7 days (6:00)
+  - rare and unusual reports for the last 30 days (6:00 and 11:00)
+  - the county's checklist count from two days ago (6:00), plus one call per missed day, up to 7
+- **Missed pulls catch up.** If the machine was off or asleep, the latest missed slot runs at the next chance. A failed pull gets at most 3 attempts per slot, an hour apart.
 - **eBird requests share one rate limit.** A Postgres advisory lock keeps at least 1.1 seconds between requests across the worker, API and CLI.
 - **Raw responses are archived** before they are transformed, so the pipeline can be replayed and new features can be built later from history.
 - **Loads are idempotent.** Observations are unique on `(checklist, species)` and stats are upserted, so re-running any job is safe.
@@ -48,6 +54,28 @@ flowchart LR
 Spuhs, slashes, hybrids and domestic types are excluded. Recent sightings from the daily API call appear as badges and never change the percentage.
 
 > **Limits:** this is a typical checklist anywhere in the county, over whichever years were downloaded. It doesn't yet account for where you bird, for how long, or whether this is an unusual year. It's the baseline for a trained model to beat. The earlier county-day model is kept in [`frequency.py`](backend/app/ml/frequency.py) for comparison.
+
+## Rarities
+
+A chased rarity is a different question from "what's likely this week", and eBird data answers it with a bias: **failed searches often go unreported, and more often because they failed.** So the Rarities page shows evidence and a status, and never a chance of finding the bird.
+
+Reports are grouped into episodes by species and area, using the middle of the pins. Shared checklists count as one outing. The status then counts *missing successes*:
+
+> expected reports = share of county checklists that had the bird × checklists on each silent day × ⅓ for fading interest
+
+| Status | When |
+|---|---|
+| Being seen | Two or more outings, with a report today (or yesterday, until 2 hours after sunrise) |
+| Single report | One outing, today or yesterday |
+| No news | Too little counted birding since the last report to say anything |
+| No new reports | At least 1 report was expected and none came |
+| Probably gone | At least 3 were expected and none came |
+
+Checklist counts arrive two days late on purpose, after most birders have submitted, so a quiet morning can't read as "gone".
+
+The thresholds are assumptions and haven't been calibrated yet. The private **"I looked"** log exists to test them: it stores the bird, the time, found or not, and what the app would have said at that moment. It never stores a location.
+
+The logic is in [`backend/app/rarities/`](backend/app/rarities).
 
 ## Location privacy
 
@@ -115,7 +143,7 @@ API docs are at http://localhost:8000/docs.
 
 `EBIRD_API_KEY` is read from your shell environment, both by Docker Compose and by the backend when it runs locally. You can put it in `.env` instead, which git ignores, but the shell takes priority. The key never reaches the frontend: only the backend calls eBird.
 
-All settings are environment variables (see [`.env.example`](.env.example) and [`backend/app/config.py`](backend/app/config.py)): `EBIRD_API_KEY`, `REGION_CODE`, `TZ`, `SCHEDULE_HOUR`, `EBIRD_MIN_INTERVAL` (1.0 or higher), `DATABASE_URL`, `PIPELINE_JOBS`, `MODEL_YEARS`, `MODEL_WINDOW_DAYS`, `MODEL_RECENT_DAYS`, `MODEL_RECENT_WEIGHT`, `ENABLE_MANUAL_TRIGGERS`.
+All settings are environment variables (see [`.env.example`](.env.example) and [`backend/app/config.py`](backend/app/config.py)): `EBIRD_API_KEY`, `REGION_CODE`, `TZ`, `SCHEDULE_HOUR`, `RARITY_REFRESH_HOUR`, `EBIRD_MIN_INTERVAL` (1.0 or higher), `DATABASE_URL`, `PIPELINE_JOBS`, `MODEL_YEARS`, `MODEL_WINDOW_DAYS`, `MODEL_RECENT_DAYS`, `MODEL_RECENT_WEIGHT`, `ENABLE_MANUAL_TRIGGERS`.
 
 ## Testing
 
@@ -132,7 +160,8 @@ CI runs all of this, and also applies migrations to a real Postgres.
 - [ ] **Model v2:** gradient boosting or logistic regression on day-of-year, checklist effort and weather (Open-Meteo), evaluated against v1 with a backtest
 - [ ] Checklist-level frequency from the eBird Basic Dataset with sampling event data. Don't bulk-fetch `/product/checklist/view`: eBird's API docs say that gets you banned
 - [ ] Hotspot-level predictions and a Leaflet map
-- [ ] Rare-bird alerts (`/data/obs/{region}/recent/notable`)
+- [ ] Calibrate rarity statuses against the search log and past episodes, adding weather
+- [ ] Rare-bird notifications
 - [ ] Multiple regions and user accounts
 - [ ] Cloud deploy (Render or Fly.io) with managed Postgres
 

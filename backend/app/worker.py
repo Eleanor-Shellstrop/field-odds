@@ -1,4 +1,4 @@
-"""Scheduler process: makes the daily eBird pull at or after SCHEDULE_HOUR (local time).
+"""Scheduler process: pulls at SCHEDULE_HOUR, and rarities again at RARITY_REFRESH_HOUR.
 
 It checks on startup and every few minutes whether today's pull is still due. A plain
 cron trigger would silently miss the run whenever the laptop was asleep or Docker was
@@ -44,9 +44,11 @@ def main() -> None:
         misfire_grace_time=None,  # after sleep, check late rather than not at all
     )
     log.info(
-        "Worker started: region=%s daily_at=%02d:00 tz=%s jobs=%s api_key_set=%s",
+        "Worker started: region=%s daily_at=%02d:00 rarities_again_at=%02d:00 tz=%s jobs=%s "
+        "api_key_set=%s",
         settings.region_code,
         settings.schedule_hour,
+        settings.rarity_refresh_hour,
         settings.tz,
         settings.pipeline_jobs,
         bool(settings.ebird_api_key),
