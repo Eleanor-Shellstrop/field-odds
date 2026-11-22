@@ -26,6 +26,11 @@ def recent():
         yield mock.get(f"/data/obs/{REGION}/recent").respond(json=load_fixture("historic_day.json"))
 
 
+@pytest.fixture(autouse=True)
+def only_the_api_job(ctx):
+    ctx.settings.pipeline_jobs = ["recent_obs"]
+
+
 def attempt(ctx, status, at):
     ctx.session.add(PipelineRun(job_name="recent_obs", params={}, status=status, started_at=at))
     ctx.session.commit()
@@ -90,7 +95,7 @@ def test_missing_key_is_not_an_attempt(ctx, recent):
 
 
 def test_recent_sightings_do_not_affect_likelihood(ctx):
-    from app.ml import get_model
+    from app.ml import FrequencyModel
 
     target = NOON.date()
     sighting = EBirdObservation(
@@ -100,7 +105,7 @@ def test_recent_sightings_do_not_affect_likelihood(ctx):
         sub_id="S1",
         obs_dt=NOON.replace(tzinfo=None) - timedelta(days=1),
     )
-    model = get_model(ctx.settings)
+    model = FrequencyModel()
 
     upsert_observations(ctx.session, REGION, [sighting], source="recent")
     assert model.predict(ctx.session, REGION, target) == []

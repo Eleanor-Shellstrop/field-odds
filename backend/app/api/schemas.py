@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class _Out(BaseModel):
@@ -13,6 +13,8 @@ class PredictionItem(_Out):
     common_name: str
     sci_name: str | None
     likelihood: float
+    sample_size: int | None
+    reported_days_ago: int | None  # only set if reported in the last 7 days
     last_seen: date | None
     last_location: str | None
 
@@ -51,6 +53,12 @@ class PipelineRunOut(_Out):
     error: str | None
     started_at: datetime
     finished_at: datetime | None
+
+    @field_validator("error", mode="before")
+    @classmethod
+    def _hide_details(cls, value: str | None) -> str | None:
+        # Tracebacks quote the data that failed, which can include private names and coordinates.
+        return "Job failed. Details are in the server log." if value else None
 
 
 class JobOut(BaseModel):

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const search = defineModel<string>('search', { required: true })
 const minLikelihood = defineModel<number>('minLikelihood', { required: true })
+const recentOnly = defineModel<boolean>('recentOnly', { required: true })
 </script>
 
 <template>
@@ -18,8 +19,16 @@ const minLikelihood = defineModel<number>('minLikelihood', { required: true })
         type="range"
         min="0"
         max="1"
-        step="0.05"
+        step="0.01"
+        :disabled="recentOnly"
       >
+    </label>
+    <label>
+      <input
+        v-model="recentOnly"
+        type="checkbox"
+      >
+      Reported in last 7 days
     </label>
   </div>
 </template>
@@ -49,5 +58,6 @@ label {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-input[type='range'] { accent-color: var(--accent); }
+input[type='range'],
+input[type='checkbox'] { accent-color: var(--accent); }
 </style>

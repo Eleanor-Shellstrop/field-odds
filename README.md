@@ -8,7 +8,7 @@ Field Odds pulls data from the [eBird API 2.0](https://documenter.getpostman.com
 |----------|------|
 | API      | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic |
 | Pipeline | Job registry plus APScheduler worker, httpx with tenacity retries |
-| Model    | Seasonal detection frequency (v1), behind a swappable `LikelihoodModel` interface |
+| Model    | Per-checklist detection frequency, behind a swappable `LikelihoodModel` interface |
 | Frontend | Vue 3, Pinia, Vue Router, TypeScript, Vite |
 | Infra    | Docker Compose (Postgres 16, api, worker, nginx), GitHub Actions CI |
 
@@ -18,11 +18,13 @@ Field Odds pulls data from the [eBird API 2.0](https://documenter.getpostman.com
 flowchart LR
     eBird[(eBird API)] -->|httpx + retries| Jobs
     subgraph worker [worker: once a day, with catch-up]
-        Jobs[recent_obs: last 7 days, one call]
+        Jobs[recent_obs: one API call → compute_predictions: local]
     end
     Jobs -->|raw JSON| Raw[(raw_responses)]
     Jobs -->|transform/load| Obs[(observations, daily_stats, species)]
-    Obs -->|historic rows only| Model[LikelihoodModel, run manually for now]
+    Hist[eBird bar chart file] -->|make histogram| Freq[(checklist_frequencies)]
+    Freq --> Model[LikelihoodModel]
+    Obs -->|last reported| API
     Model --> Pred[(predictions)]
     Pred --> API[FastAPI]
     API --> Web[Vue + Pinia]
@@ -35,19 +37,35 @@ flowchart LR
 - **Loads are idempotent.** Observations are unique on `(checklist, species)` and stats are upserted, so re-running any job is safe.
 - **Every job run is recorded** in `pipeline_runs` (status, row count, error) and exposed at `/api/pipeline/runs`.
 
-## How the likelihood is calculated (v1)
+## How the likelihood is calculated
 
-> **Being replaced.** v1 is no longer recalculated on a schedule. It will give way to a per-checklist frequency built from eBird's bulk data products. Recent sightings from the daily pull are never counted in the percentage.
+**The percentage is the share of complete checklists from this time of year that include the species.** A complete checklist is one where the birder reported everything they identified, so it also tells us which birds were *not* found.
 
-eBird has no public "frequency" endpoint, so Field Odds computes its own. For a target date *D*:
+1. Each month has four periods: days 1-7, 8-14, 15-21 and 22 to the end.
+2. eBird's bar chart histogram gives, for each period, the number of complete checklists and the share reporting each species.
+3. Each day's likelihood is that share for the day's period. The number of checklists behind it is stored and shown with it.
 
-1. **Sample comparable days:** *D* ± 7 days in each of the last 3 years, plus the 14 days just before *D*. The recent days count double.
-2. **Keep only days with effort:** a day counts only if at least one checklist was submitted (`/product/stats`). Otherwise no one looked, which isn't the same as the bird not being there.
-3. **Likelihood = weighted share of those days on which the species was reported** (`/data/obs/{region}/historic/{date}`).
+Spuhs, slashes, hybrids and domestic types are excluded. Recent sightings from the daily API call appear as badges and never change the percentage.
 
-Spuhs, slashes and hybrids are excluded. The logic lives in [`backend/app/ml/frequency.py`](backend/app/ml/frequency.py). The core is a pure function with unit tests.
+> **Limits:** this is a typical checklist anywhere in the county, over whichever years were downloaded. It doesn't yet account for where you bird, for how long, or whether this is an unusual year. It's the baseline for a trained model to beat. The earlier county-day model is kept in [`frequency.py`](backend/app/ml/frequency.py) for comparison.
 
-> **What this number means:** "on comparable days, someone reported this species somewhere in the county X% of the time." That's an upper bound on what one birder at one spot will see, and it's a baseline to beat with later models.
+## Location privacy
+
+Many eBird sightings come from personal locations, whose names are often street addresses or coordinates. eBird marks these with `locationPrivate`.
+
+- **Public hotspots** are shown as they are.
+- **Private locations** never leave the API with their name, id or coordinates. They become "Private location in *area*", using the area that contains the point.
+- **Unknown locations are treated as private.**
+- **Areas under 5 km² aren't named**, because that would narrow a sighting down to a few streets.
+- **Pipeline errors are summarized by the API**, because tracebacks can quote the data that failed.
+
+Areas come from two [Census cartographic boundary](https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html) files for your state, `cb_<year>_<state>_place_500k.zip` and `cb_<year>_<state>_cousub_500k.zip`, saved anywhere under `data/census/`. Lookups run locally, so no coordinates are sent to a geocoder. For a birding area with no official boundary, `AREA` draws an approximate outline around the public hotspots whose names start with that text:
+
+```bash
+make boundaries AREA="Name of birding area"
+```
+
+The rule lives in [`backend/app/privacy.py`](backend/app/privacy.py). Any new endpoint that returns a location must use it.
 
 ## Quick start
 
@@ -58,6 +76,9 @@ export EBIRD_API_KEY=your-key
 cp .env.example .env          # optional: set REGION_CODE, TZ, etc. (no secrets needed here)
 make up                       # db, api (:8000), worker, web (:8080)
 make taxonomy                 # load species names (once)
+
+# On ebird.org, open your county's bar chart (all months) and click Download Histogram Data
+make histogram FILE=/path/to/ebird_<region>__<years>_1_12_barchart.txt
 open http://localhost:8080
 ```
 
@@ -78,6 +99,8 @@ API docs are at http://localhost:8000/docs.
 | `python -m app.cli list-jobs` | Show registered jobs |
 | `python -m app.cli run-job historic_day --day 2026-11-18` | Run one job |
 | `python -m app.cli run-pipeline` | Run the scheduled job chain once |
+| `python -m app.cli import-histogram <file>` | Load a bar chart histogram and recompute today |
+| `python -m app.cli import-boundaries <dir>` | Load Census boundaries and label private locations |
 | `python -m app.cli backfill --years 3` | Legacy v1 history fetch. Not recommended: use eBird's bulk data products for history |
 | `python -m app.cli seed-taxonomy` | Load or refresh eBird taxonomy |
 
@@ -107,7 +130,7 @@ CI runs all of this, and also applies migrations to a real Postgres.
 
 - [ ] Species detail page and pipeline status page in the UI
 - [ ] **Model v2:** gradient boosting or logistic regression on day-of-year, checklist effort and weather (Open-Meteo), evaluated against v1 with a backtest
-- [ ] Checklist-level frequency from the eBird bar chart histogram, then the eBird Basic Dataset with sampling event data. Don't bulk-fetch `/product/checklist/view`: eBird's API docs say that gets you banned
+- [ ] Checklist-level frequency from the eBird Basic Dataset with sampling event data. Don't bulk-fetch `/product/checklist/view`: eBird's API docs say that gets you banned
 - [ ] Hotspot-level predictions and a Leaflet map
 - [ ] Rare-bird alerts (`/data/obs/{region}/recent/notable`)
 - [ ] Multiple regions and user accounts

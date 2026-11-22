@@ -1,5 +1,9 @@
 .env
 *.db
+# eBird data downloads must not be redistributed
+/data/
+*_barchart*.txt
+ebd_*
 __pycache__/
 *.pyc
 .venv/

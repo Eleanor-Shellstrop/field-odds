@@ -10,12 +10,14 @@ export const usePredictionsStore = defineStore('predictions', () => {
   // Filters live in the store so other views (a map, say) can share them later.
   const minLikelihood = ref(0.05)
   const search = ref('')
+  const recentOnly = ref(false)
 
   const filtered = computed(() => {
     const q = search.value.trim().toLowerCase()
     return (data.value?.items ?? []).filter(
       (s) =>
-        s.likelihood >= minLikelihood.value &&
+        // Most recent sightings are of uncommon birds, so this view ignores the threshold
+        (recentOnly.value ? s.reported_days_ago !== null : s.likelihood >= minLikelihood.value) &&
         (!q ||
           s.common_name.toLowerCase().includes(q) ||
           (s.sci_name ?? '').toLowerCase().includes(q)),
@@ -34,5 +36,5 @@ export const usePredictionsStore = defineStore('predictions', () => {
     }
   }
 
-  return { data, loading, error, minLikelihood, search, filtered, fetchToday }
+  return { data, loading, error, minLikelihood, search, recentOnly, filtered, fetchToday }
 })

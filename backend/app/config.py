@@ -22,10 +22,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./fieldodds.db"
 
     # Once a day, at or after this local hour. The default pipeline is one API call.
-    # compute_predictions is deliberately absent: recent sightings can't say how many
-    # checklists missed a bird, so they must not drive the percentages.
+    # compute_predictions is local: it reads the imported checklist frequencies and never
+    # recent sightings, which can't say how many checklists missed a bird.
     schedule_hour: int = Field(default=6, ge=0, le=23)
-    pipeline_jobs: list[str] = Field(default=["recent_obs"])
+    pipeline_jobs: list[str] = Field(default=["recent_obs", "compute_predictions"])
 
     # Likelihood model v1 knobs
     model_years: int = 3

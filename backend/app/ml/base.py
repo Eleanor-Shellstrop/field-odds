@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 class SpeciesLikelihood:
     species_code: str
     likelihood: float  # 0..1
+    sample_size: int | None = None
 
 
 class LikelihoodModel(Protocol):

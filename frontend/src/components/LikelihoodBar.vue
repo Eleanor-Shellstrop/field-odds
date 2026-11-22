@@ -4,7 +4,9 @@ import { computed } from 'vue'
 const props = defineProps<{ value: number }>()
 
 const pct = computed(() => Math.round(Math.min(Math.max(props.value, 0), 1) * 100))
-const tier = computed(() => (pct.value >= 60 ? 'high' : pct.value >= 25 ? 'mid' : 'low'))
+const label = computed(() => (props.value > 0 && props.value < 0.01 ? '<1%' : `${pct.value}%`))
+// Per-checklist frequencies run low: a county's most common birds are often under 50%.
+const tier = computed(() => (pct.value >= 25 ? 'high' : pct.value >= 10 ? 'mid' : 'low'))
 </script>
 
 <template>
@@ -14,14 +16,14 @@ const tier = computed(() => (pct.value >= 60 ? 'high' : pct.value >= 25 ? 'mid' 
     :aria-valuenow="pct"
     aria-valuemin="0"
     aria-valuemax="100"
-    :aria-label="`${pct}% likely`"
+    :aria-label="`${label} likely`"
   >
     <div
       class="fill"
       :class="tier"
       :style="{ width: `${pct}%` }"
     />
-    <span class="label">{{ pct }}%</span>
+    <span class="label">{{ label }}</span>
   </div>
 </template>
 

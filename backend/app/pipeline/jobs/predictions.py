@@ -13,6 +13,7 @@ from app.pipeline.registry import register
 class ComputePredictionsJob(Job):
     name = "compute_predictions"
     description = "Run the active likelihood model and store today's predictions"
+    uses_api = False
 
     def execute(self, ctx: JobContext, day: date | str | None = None, **_: Any) -> int:
         target = parse_day(day) or ctx.settings.today()
@@ -32,7 +33,8 @@ class ComputePredictionsJob(Job):
                 region_code=ctx.region,
                 for_date=target,
                 species_code=r.species_code,
-                likelihood=round(r.likelihood, 4),
+                likelihood=round(r.likelihood, 7),
+                sample_size=r.sample_size,
                 model_name=model.name,
             )
             for r in results

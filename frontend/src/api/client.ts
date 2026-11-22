@@ -5,6 +5,8 @@ export interface PredictionItem {
   common_name: string
   sci_name: string | null
   likelihood: number
+  sample_size: number | null
+  reported_days_ago: number | null
   last_seen: string | null
   last_location: string | null
 }

@@ -6,7 +6,7 @@ import SpeciesRow from '@/components/SpeciesRow.vue'
 import { usePredictionsStore } from '@/stores/predictions'
 
 const store = usePredictionsStore()
-const { data, loading, error, filtered, search, minLikelihood } = storeToRefs(store)
+const { data, loading, error, filtered, search, minLikelihood, recentOnly } = storeToRefs(store)
 
 onMounted(store.fetchToday)
 </script>
@@ -19,13 +19,18 @@ onMounted(store.fetchToday)
         v-if="data?.for_date"
         class="meta"
       >
-        {{ data.region_code }} · {{ data.for_date }} · model {{ data.model_name }}
+        {{ data.region_code }} · {{ data.for_date }}
+      </p>
+      <p class="meta">
+        The percentage is the share of complete eBird checklists from this week of the year,
+        across the county, that include the bird. Recent reports don't change it.
       </p>
     </header>
 
     <FilterBar
       v-model:search="search"
       v-model:min-likelihood="minLikelihood"
+      v-model:recent-only="recentOnly"
     />
 
     <p v-if="loading">
@@ -41,7 +46,7 @@ onMounted(store.fetchToday)
       v-else-if="!data?.for_date"
       class="empty"
     >
-      No likelihoods yet. They are calculated from historical data, which hasn't been loaded.
+      No likelihoods yet. Import your county's eBird bar chart file (see the README) to calculate them.
     </p>
     <template v-else>
       <p class="count">

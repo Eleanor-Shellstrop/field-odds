@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -6,9 +8,20 @@ from app.api.schemas import PredictionItem, TodayResponse
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.ml import get_model
-from app.models import Observation, Prediction, Species
+from app.models import Location, Observation, Prediction, Species
+from app.privacy import public_location
 
 router = APIRouter(prefix="/api/predictions", tags=["predictions"])
+
+
+RECENT_DAYS = 7
+
+
+def _days_ago(seen: date | None, today: date) -> int | None:
+    if seen is None:
+        return None
+    days = (today - seen).days
+    return days if 0 <= days <= RECENT_DAYS else None
 
 
 @router.get("/today", response_model=TodayResponse)
@@ -41,6 +54,7 @@ def today(
             Observation.common_name,
             Observation.sci_name,
             Observation.obs_date,
+            Observation.loc_id,
             Observation.loc_name,
             func.row_number()
             .over(partition_by=Observation.species_code, order_by=Observation.obs_dt.desc())
@@ -55,6 +69,7 @@ def today(
         select(
             Prediction.species_code,
             Prediction.likelihood,
+            Prediction.sample_size,
             Species.common_name,
             Species.sci_name,
             Species.taxon_order,
@@ -62,9 +77,11 @@ def today(
             last.c.sci_name.label("obs_sci_name"),
             last.c.obs_date,
             last.c.loc_name,
+            Location,
         )
         .outerjoin(Species, Species.species_code == Prediction.species_code)
         .outerjoin(last, last.c.species_code == Prediction.species_code)
+        .outerjoin(Location, Location.loc_id == last.c.loc_id)
         .where(
             Prediction.region_code == region,
             Prediction.model_name == model_name,
@@ -75,14 +92,17 @@ def today(
         .limit(limit)
     )
 
+    current_day = settings.today()
     items = [
         PredictionItem(
             species_code=r.species_code,
             common_name=r.common_name or r.obs_common_name or r.species_code,
             sci_name=r.sci_name or r.obs_sci_name,
             likelihood=r.likelihood,
+            sample_size=r.sample_size,
+            reported_days_ago=_days_ago(r.obs_date, current_day),
             last_seen=r.obs_date,
-            last_location=r.loc_name,
+            last_location=public_location(r.Location, r.loc_name).name if r.obs_date else None,
         )
         for r in session.execute(stmt)
     ]
