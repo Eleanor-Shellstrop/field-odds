@@ -25,7 +25,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fieldodds}:${POSTGRES_PASSWORD:-fieldodds}@db:5432/${POSTGRES_DB:-fieldodds}
     command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +42,7 @@ services:
   web:
     build: ./frontend
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
       - api
 
