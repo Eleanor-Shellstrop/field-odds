@@ -5,11 +5,11 @@ before transforming it.
 """
 
 import logging
-import time
 from datetime import date
 from typing import Any
 
 import httpx
+from sqlalchemy import Engine
 from tenacity import (
     retry,
     retry_if_exception,
@@ -17,6 +17,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from app.ebird.rate_limit import request_slot
 from app.ebird.schemas import EBirdDailyStats, EBirdObservation, EBirdTaxon
 
 log = logging.getLogger(__name__)
@@ -39,8 +40,9 @@ class EBirdClient:
         self,
         api_key: str,
         base_url: str = "https://api.ebird.org/v2",
-        min_interval: float = 0.5,
+        min_interval: float = 1.1,
         transport: httpx.BaseTransport | None = None,
+        engine: Engine | None = None,
     ) -> None:
         if not api_key:
             raise EBirdError("EBIRD_API_KEY is not set")
@@ -51,7 +53,7 @@ class EBirdClient:
             transport=transport,
         )
         self._min_interval = min_interval
-        self._last_request = 0.0
+        self._engine = engine
 
     def close(self) -> None:
         self._http.close()
@@ -64,12 +66,6 @@ class EBirdClient:
 
     # --- low level -------------------------------------------------------------------
 
-    def _throttle(self) -> None:
-        wait = self._min_interval - (time.monotonic() - self._last_request)
-        if wait > 0:
-            time.sleep(wait)
-        self._last_request = time.monotonic()
-
     @retry(
         retry=retry_if_exception(_is_retryable),
         wait=wait_exponential(multiplier=1, max=30),
@@ -77,9 +73,10 @@ class EBirdClient:
         reraise=True,
     )
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        self._throttle()
-        log.debug("GET %s %s", path, params)
-        resp = self._http.get(path, params=params)
+        # Retries re-enter here, so they wait for a slot like any other request.
+        with request_slot(self._min_interval, self._engine):
+            log.debug("GET %s %s", path, params)
+            resp = self._http.get(path, params=params)
         resp.raise_for_status()
         return resp.json()
 

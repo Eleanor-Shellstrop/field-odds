@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -23,19 +22,23 @@ def store_raw(
     )
 
 
-def _insert_ignore(session: Session, table: Any) -> Any:
-    dialect = session.get_bind().dialect.name
-    if dialect == "postgresql":
-        return pg_insert(table).on_conflict_do_nothing()
-    if dialect == "sqlite":
-        return sqlite_insert(table).on_conflict_do_nothing()
-    return insert(table)
+def _insert_observations(session: Session, source: str) -> Any:
+    postgres = session.get_bind().dialect.name == "postgresql"
+    stmt = (pg_insert if postgres else sqlite_insert)(Observation)
+    key = ["sub_id", "species_code"]
+    if source == "historic":
+        # The model only reads historic rows, so historic must win over recent.
+        return stmt.on_conflict_do_update(index_elements=key, set_={"source": source})
+    return stmt.on_conflict_do_nothing(index_elements=key)
 
 
 def upsert_observations(
     session: Session, region: str, observations: list[EBirdObservation], source: str
 ) -> int:
-    """Insert observations, skipping any (sub_id, species) pair already stored."""
+    """Insert observations once per (sub_id, species).
+
+    If both feeds return the same observation, it is kept as `historic`.
+    """
     if not observations:
         return 0
     rows = [
@@ -56,5 +59,5 @@ def upsert_observations(
         }
         for o in observations
     ]
-    session.execute(_insert_ignore(session, Observation), rows)
+    session.execute(_insert_observations(session, source), rows)
     return len(rows)

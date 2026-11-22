@@ -41,7 +41,7 @@ onMounted(store.fetchToday)
       v-else-if="!data?.for_date"
       class="empty"
     >
-      No predictions yet. Run <code>make backfill</code> to pull history from eBird.
+      No likelihoods yet. They are calculated from historical data, which hasn't been loaded.
     </p>
     <template v-else>
       <p class="count">
@@ -63,5 +63,4 @@ onMounted(store.fetchToday)
 .meta, .count { color: var(--muted); font-size: 0.9rem; margin: 0.25rem 0 0; }
 .list { list-style: none; margin: 0; padding: 0; }
 .error { color: var(--danger); }
-.empty code { background: var(--track); padding: 0.1rem 0.35rem; border-radius: 0.25rem; }
 </style>

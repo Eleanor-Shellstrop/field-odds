@@ -1,46 +1,55 @@
-"""Scheduler process: runs the daily pipeline at SCHEDULE_HOURS (local time).
+"""Scheduler process: makes the daily eBird pull at or after SCHEDULE_HOUR (local time).
 
-Runs separately from the API so the two can scale and restart independently. Jobs
-contain no scheduling code, so this file can later be swapped for Celery beat,
-Prefect, or a cloud scheduler (cron to `python -m app.cli run-pipeline`).
+It checks on startup and every few minutes whether today's pull is still due. A plain
+cron trigger would silently miss the run whenever the laptop was asleep or Docker was
+stopped. The check itself only reads the database.
+
+Runs separately from the API so the two can scale and restart independently.
 """
 
 import logging
+from datetime import datetime
 
 from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import get_settings
-from app.pipeline import run_pipeline
+from app.pipeline.schedule import run_if_due
 from app.runtime import job_context
 
 log = logging.getLogger("fieldodds.worker")
 
+CHECK_EVERY_MINUTES = 10
+
 
 def tick() -> None:
     with job_context() as ctx:
-        runs = run_pipeline(ctx)
-    log.info("Pipeline tick done: %s", ", ".join(f"{r.job_name}={r.status}" for r in runs))
+        runs = run_if_due(ctx)
+    if runs:
+        log.info("Daily pull: %s", ", ".join(f"{r.job_name}={r.status}" for r in runs))
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)  # otherwise logs every check
     settings = get_settings()
     scheduler = BlockingScheduler(timezone=settings.zone)
     scheduler.add_job(
         tick,
-        CronTrigger(hour=settings.schedule_hours, minute=0, timezone=settings.zone),
-        id="daily_pipeline",
+        IntervalTrigger(minutes=CHECK_EVERY_MINUTES, timezone=settings.zone),
+        id="daily_pull",
+        next_run_time=datetime.now(settings.zone),
         max_instances=1,
         coalesce=True,
-        misfire_grace_time=3600,
+        misfire_grace_time=None,  # after sleep, check late rather than not at all
     )
     log.info(
-        "Worker started: region=%s hours=%s tz=%s jobs=%s",
+        "Worker started: region=%s daily_at=%02d:00 tz=%s jobs=%s api_key_set=%s",
         settings.region_code,
-        settings.schedule_hours,
+        settings.schedule_hour,
         settings.tz,
         settings.pipeline_jobs,
+        bool(settings.ebird_api_key),
     )
     scheduler.start()
 

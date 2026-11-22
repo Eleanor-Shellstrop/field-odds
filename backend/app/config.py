@@ -13,18 +13,19 @@ class Settings(BaseSettings):
 
     ebird_api_key: str = ""
     ebird_base_url: str = "https://api.ebird.org/v2"
-    # Minimum seconds between eBird requests; keeps backfills polite.
-    ebird_min_interval: float = 0.5
+    # Seconds between eBird requests, across all processes. eBird publishes no limit,
+    # so stay slower than one per second, and don't allow configuring anything faster.
+    ebird_min_interval: float = Field(default=1.1, ge=1.0)
 
     region_code: str = "US-WA-033"
     tz: str = "America/Los_Angeles"
     database_url: str = "sqlite:///./fieldodds.db"
 
-    # Pipeline: which jobs run on each scheduled tick, in order.
-    schedule_hours: str = "6,18"
-    pipeline_jobs: list[str] = Field(
-        default=["recent_obs", "historic_day", "daily_stats", "compute_predictions"]
-    )
+    # Once a day, at or after this local hour. The default pipeline is one API call.
+    # compute_predictions is deliberately absent: recent sightings can't say how many
+    # checklists missed a bird, so they must not drive the percentages.
+    schedule_hour: int = Field(default=6, ge=0, le=23)
+    pipeline_jobs: list[str] = Field(default=["recent_obs"])
 
     # Likelihood model v1 knobs
     model_years: int = 3
