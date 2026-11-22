@@ -24,7 +24,7 @@ lint:
 taxonomy:      ## Load eBird taxonomy (species names) into the db
 	docker compose run --rm api python -m app.cli seed-taxonomy
 
-backfill:      ## Pull 3 years of historic data around today's date
+backfill:      ## Legacy v1 history fetch; see README before using
 	docker compose run --rm api python -m app.cli backfill --years 3
 
 pipeline:      ## Run the scheduled pipeline once, right now

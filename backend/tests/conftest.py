@@ -31,7 +31,6 @@ def settings() -> Settings:
         _env_file=None,  # type: ignore[call-arg]
         ebird_api_key="test-key",
         ebird_base_url=BASE_URL,
-        ebird_min_interval=0,
         region_code=REGION,
         tz="UTC",
         database_url="sqlite://",

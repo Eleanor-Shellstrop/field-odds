@@ -16,7 +16,7 @@ class RecentObservationsJob(Job):
     name = "recent_obs"
     description = "Latest sighting of each species in the region (GET /data/obs/{region}/recent)"
 
-    def execute(self, ctx: JobContext, back: int | str = 2, **_: Any) -> int:
+    def execute(self, ctx: JobContext, back: int | str = 7, **_: Any) -> int:
         back = int(back)
         raw, observations = ctx.client.recent_observations(ctx.region, back=back)
         store_raw(ctx.session, "data/obs/recent", raw, ctx.region, {"back": back})

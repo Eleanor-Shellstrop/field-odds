@@ -94,6 +94,9 @@ class FrequencyModel:
             select(Observation.species_code, Observation.obs_date)
             .where(
                 Observation.region_code == region,
+                # The recent feed has only each species' latest sighting, so counting it
+                # would make every other species look absent on those days.
+                Observation.source == "historic",
                 Observation.obs_date.between(lo, hi),
                 Observation.species_code.not_in(excluded),
             )

@@ -17,23 +17,27 @@ Field Odds pulls data from the [eBird API 2.0](https://documenter.getpostman.com
 ```mermaid
 flowchart LR
     eBird[(eBird API)] -->|httpx + retries| Jobs
-    subgraph worker [worker: APScheduler, 06:00 and 18:00]
-        Jobs[recent_obs → historic_day → daily_stats → compute_predictions]
+    subgraph worker [worker: once a day, with catch-up]
+        Jobs[recent_obs: last 7 days, one call]
     end
     Jobs -->|raw JSON| Raw[(raw_responses)]
     Jobs -->|transform/load| Obs[(observations, daily_stats, species)]
-    Obs --> Model[LikelihoodModel]
+    Obs -->|historic rows only| Model[LikelihoodModel, run manually for now]
     Model --> Pred[(predictions)]
     Pred --> API[FastAPI]
     API --> Web[Vue + Pinia]
 ```
 
 - The **worker and API are separate processes.** Jobs contain no scheduling code, so APScheduler can be swapped for Celery beat, Prefect or a cloud cron without touching them.
+- **The API is for recent sightings only.** Once a day, one call fetches the last 7 days, which picks up checklists submitted late. If the machine was off or asleep, the pull runs at the next chance. A failed pull gets at most 3 attempts a day, an hour apart.
+- **eBird requests share one rate limit.** A Postgres advisory lock keeps at least 1.1 seconds between requests across the worker, API and CLI.
 - **Raw responses are archived** before they are transformed, so the pipeline can be replayed and new features can be built later from history.
 - **Loads are idempotent.** Observations are unique on `(checklist, species)` and stats are upserted, so re-running any job is safe.
 - **Every job run is recorded** in `pipeline_runs` (status, row count, error) and exposed at `/api/pipeline/runs`.
 
 ## How the likelihood is calculated (v1)
+
+> **Being replaced.** v1 is no longer recalculated on a schedule. It will give way to a per-checklist frequency built from eBird's bulk data products. Recent sightings from the daily pull are never counted in the percentage.
 
 eBird has no public "frequency" endpoint, so Field Odds computes its own. For a target date *D*:
 
@@ -54,7 +58,6 @@ export EBIRD_API_KEY=your-key
 cp .env.example .env          # optional: set REGION_CODE, TZ, etc. (no secrets needed here)
 make up                       # db, api (:8000), worker, web (:8080)
 make taxonomy                 # load species names (once)
-make backfill                 # ~60 days × 2 calls; resumable
 open http://localhost:8080
 ```
 
@@ -75,7 +78,7 @@ API docs are at http://localhost:8000/docs.
 | `python -m app.cli list-jobs` | Show registered jobs |
 | `python -m app.cli run-job historic_day --day 2026-11-18` | Run one job |
 | `python -m app.cli run-pipeline` | Run the scheduled job chain once |
-| `python -m app.cli backfill --years 3` | Fetch the history the model needs (skips stored days) |
+| `python -m app.cli backfill --years 3` | Legacy v1 history fetch. Not recommended: use eBird's bulk data products for history |
 | `python -m app.cli seed-taxonomy` | Load or refresh eBird taxonomy |
 
 ## Adding a new eBird call
@@ -89,7 +92,7 @@ API docs are at http://localhost:8000/docs.
 
 `EBIRD_API_KEY` is read from your shell environment, both by Docker Compose and by the backend when it runs locally. You can put it in `.env` instead, which git ignores, but the shell takes priority. The key never reaches the frontend: only the backend calls eBird.
 
-All settings are environment variables (see [`.env.example`](.env.example) and [`backend/app/config.py`](backend/app/config.py)): `EBIRD_API_KEY`, `REGION_CODE`, `TZ`, `SCHEDULE_HOURS`, `DATABASE_URL`, `PIPELINE_JOBS`, `MODEL_YEARS`, `MODEL_WINDOW_DAYS`, `MODEL_RECENT_DAYS`, `MODEL_RECENT_WEIGHT`, `ENABLE_MANUAL_TRIGGERS`.
+All settings are environment variables (see [`.env.example`](.env.example) and [`backend/app/config.py`](backend/app/config.py)): `EBIRD_API_KEY`, `REGION_CODE`, `TZ`, `SCHEDULE_HOUR`, `EBIRD_MIN_INTERVAL` (1.0 or higher), `DATABASE_URL`, `PIPELINE_JOBS`, `MODEL_YEARS`, `MODEL_WINDOW_DAYS`, `MODEL_RECENT_DAYS`, `MODEL_RECENT_WEIGHT`, `ENABLE_MANUAL_TRIGGERS`.
 
 ## Testing
 
@@ -104,7 +107,7 @@ CI runs all of this, and also applies migrations to a real Postgres.
 
 - [ ] Species detail page and pipeline status page in the UI
 - [ ] **Model v2:** gradient boosting or logistic regression on day-of-year, checklist effort and weather (Open-Meteo), evaluated against v1 with a backtest
-- [ ] Checklist-level frequency (`/product/lists` + `/product/checklist/view`) instead of day-level
+- [ ] Checklist-level frequency from the eBird bar chart histogram, then the eBird Basic Dataset with sampling event data. Don't bulk-fetch `/product/checklist/view`: eBird's API docs say that gets you banned
 - [ ] Hotspot-level predictions and a Leaflet map
 - [ ] Rare-bird alerts (`/data/obs/{region}/recent/notable`)
 - [ ] Multiple regions and user accounts
