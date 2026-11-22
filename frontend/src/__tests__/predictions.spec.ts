@@ -11,11 +11,11 @@ const sample: TodayResponse = {
   model_name: 'frequency_v1',
   items: [
     { species_code: 'amecro', common_name: 'American Crow', sci_name: 'Corvus brachyrhynchos',
-      likelihood: 0.97, last_seen: '2026-11-18', last_location: 'Discovery Park' },
+      likelihood: 0.97, sample_size: 100, reported_days_ago: null, last_seen: '2026-11-18', last_location: 'Discovery Park' },
     { species_code: 'baleag', common_name: 'Bald Eagle', sci_name: 'Haliaeetus leucocephalus',
-      likelihood: 0.41, last_seen: '2026-11-17', last_location: null },
+      likelihood: 0.41, sample_size: 100, reported_days_ago: null, last_seen: '2026-11-17', last_location: null },
     { species_code: 'snoowl1', common_name: 'Snowy Owl', sci_name: 'Bubo scandiacus',
-      likelihood: 0.02, last_seen: null, last_location: null },
+      likelihood: 0.02, sample_size: 100, reported_days_ago: 2, last_seen: null, last_location: null },
   ],
 }
 
@@ -40,6 +40,14 @@ describe('predictions store', () => {
     expect(store.filtered).toHaveLength(3)
   })
 
+  it('shows rare birds reported recently, regardless of the threshold', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(sample))))
+    const store = usePredictionsStore()
+    await store.fetchToday()
+    store.recentOnly = true
+    expect(store.filtered.map((s) => s.species_code)).toEqual(['snoowl1'])
+  })
+
   it('records API errors', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 500 })))
     const store = usePredictionsStore()
@@ -54,6 +62,8 @@ describe('LikelihoodBar', () => {
     const wrapper = mount(LikelihoodBar, { props: { value: 0.666 } })
     expect(wrapper.text()).toBe('67%')
     expect(wrapper.attributes('aria-valuenow')).toBe('67')
+
+    expect(mount(LikelihoodBar, { props: { value: 0.002 } }).text()).toBe('<1%')
 
     const over = mount(LikelihoodBar, { props: { value: 1.4 } })
     expect(over.find('.fill').attributes('style')).toContain('width: 100%')

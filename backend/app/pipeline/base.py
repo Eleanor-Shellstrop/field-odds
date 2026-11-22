@@ -49,6 +49,7 @@ class JobContext:
 class Job(ABC):
     name: ClassVar[str]
     description: ClassVar[str] = ""
+    uses_api: ClassVar[bool] = True  # False means it can run without an eBird key
 
     @abstractmethod
     def execute(self, ctx: JobContext, **params: Any) -> int:

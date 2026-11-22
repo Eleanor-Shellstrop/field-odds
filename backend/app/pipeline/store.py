@@ -7,7 +7,8 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.ebird.schemas import EBirdObservation
-from app.models import Observation, RawResponse
+from app.geo.labels import label_locations
+from app.models import Location, Observation, RawResponse
 
 
 def store_raw(
@@ -30,6 +31,21 @@ def _insert_observations(session: Session, source: str) -> Any:
         # The model only reads historic rows, so historic must win over recent.
         return stmt.on_conflict_do_update(index_elements=key, set_={"source": source})
     return stmt.on_conflict_do_nothing(index_elements=key)
+
+
+def upsert_locations(session: Session, observations: list[EBirdObservation]) -> None:
+    latest: dict[str, EBirdObservation] = {}
+    for o in observations:
+        if not o.loc_id:
+            continue
+        # If one response disagrees with itself about a location, private wins.
+        if o.loc_id not in latest or o.location_private:
+            latest[o.loc_id] = o
+    locations = [
+        session.merge(Location(loc_id=loc_id, is_private=o.location_private, lat=o.lat, lng=o.lng))
+        for loc_id, o in latest.items()
+    ]
+    label_locations(session, locations)
 
 
 def upsert_observations(
@@ -60,4 +76,5 @@ def upsert_observations(
         for o in observations
     ]
     session.execute(_insert_observations(session, source), rows)
+    upsert_locations(session, observations)
     return len(rows)

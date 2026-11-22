@@ -37,4 +37,5 @@ class Prediction(Base):
     species_code: Mapped[str] = mapped_column(String(20))
     likelihood: Mapped[float] = mapped_column(Float)
     model_name: Mapped[str] = mapped_column(String(50))
+    sample_size: Mapped[int | None]  # checklists behind the number, where the model knows
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

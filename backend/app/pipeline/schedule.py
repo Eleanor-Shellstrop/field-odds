@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.models import PipelineRun
 from app.pipeline.base import JobContext, run_job
+from app.pipeline.registry import get_job
 
 log = logging.getLogger(__name__)
 
@@ -35,13 +36,12 @@ def run_if_due(ctx: JobContext, now: datetime | None = None) -> list[PipelineRun
     if local_now < scheduled:
         return []
 
-    if not settings.ebird_api_key:
-        # Not counted as an attempt, so fixing the key and restarting runs right away.
-        log.warning("Daily pull skipped: EBIRD_API_KEY is not set")
-        return []
-
     runs = []
     for name in settings.pipeline_jobs:
+        if get_job(name).uses_api and not settings.ebird_api_key:
+            # Not counted as an attempt, so fixing the key and restarting runs right away.
+            log.warning("%s skipped: EBIRD_API_KEY is not set", name)
+            continue
         attempts = ctx.session.scalars(
             select(PipelineRun).where(
                 PipelineRun.job_name == name,

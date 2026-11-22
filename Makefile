@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-backend test-frontend lint backfill pipeline taxonomy dev-api dev-web
+.PHONY: up down logs test test-backend test-frontend lint backfill histogram boundaries pipeline taxonomy dev-api dev-web
 
 up:            ## Start db, api, worker and web
 	docker compose up --build -d
@@ -23,6 +23,14 @@ lint:
 
 taxonomy:      ## Load eBird taxonomy (species names) into the db
 	docker compose run --rm api python -m app.cli seed-taxonomy
+
+histogram:     ## Import an eBird bar chart file: make histogram FILE=/path/to/file.txt
+	@test -f "$(FILE)" || { echo "usage: make histogram FILE=/path/to/ebird_..._barchart.txt"; exit 1; }
+	docker compose run --rm -T api python -m app.cli import-histogram /dev/stdin --filename "$$(basename "$(FILE)")" < "$(FILE)"
+
+boundaries:    ## Label private locations: make boundaries [AREA="Hotspot name prefix"]
+	@test -d data/census || { echo "Put the Census place and cousub zips in data/census (see README)"; exit 1; }
+	docker compose run --rm -v "$(CURDIR)/data/census:/census:ro" api python -m app.cli import-boundaries /census --hotspot-area "$(AREA)"
 
 backfill:      ## Legacy v1 history fetch; see README before using
 	docker compose run --rm api python -m app.cli backfill --years 3

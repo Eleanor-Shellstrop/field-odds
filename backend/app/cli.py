@@ -1,6 +1,7 @@
 """Command line entry point: `python -m app.cli --help`."""
 
 import logging
+from pathlib import Path
 
 import typer
 from sqlalchemy import select
@@ -54,6 +55,42 @@ def run_all() -> None:
 def seed_taxonomy() -> None:
     """Load eBird species names. Run once, then about yearly."""
     run_one("taxonomy", None)
+
+
+@cli.command("import-histogram")
+def import_histogram(
+    path: str,
+    filename: str | None = typer.Option(None, help="Original name, when reading /dev/stdin"),
+) -> None:
+    """Load an eBird bar chart histogram file, then recompute today's likelihoods."""
+    with job_context() as ctx:
+        run = run_job("import_histogram", ctx, path=path, filename=filename or Path(path).name)
+        if run.status != "success":
+            typer.echo(run.error or "", err=True)
+            raise typer.Exit(1)
+        typer.echo(f"import_histogram: success ({run.rows_written} rows)")
+        predicted = run_job("compute_predictions", ctx)
+        typer.echo(f"compute_predictions: {predicted.status} ({predicted.rows_written} species)")
+        if predicted.status != "success":
+            raise typer.Exit(1)
+
+
+@cli.command("import-boundaries")
+def import_boundaries(
+    path: str,
+    hotspot_area: list[str] | None = typer.Option(
+        None, help="Outline an area from hotspots whose names start with this. Repeatable."
+    ),
+) -> None:
+    """Load Census boundary files and label private locations by area."""
+    with job_context() as ctx:
+        run = run_job(
+            "import_boundaries", ctx, path=path, hotspot_areas=[a for a in hotspot_area or [] if a]
+        )
+        if run.status != "success":
+            typer.echo(run.error or "", err=True)
+            raise typer.Exit(1)
+        typer.echo(f"import_boundaries: success ({run.rows_written} boundaries)")
 
 
 @cli.command()

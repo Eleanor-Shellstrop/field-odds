@@ -35,6 +35,18 @@ class Species(Base):
     family_common_name: Mapped[str | None] = mapped_column(String(200))
 
 
+class ChecklistFrequency(Base):
+    """Share of complete checklists reporting a species, per quarter-month period (0-47)."""
+
+    __tablename__ = "checklist_frequencies"
+
+    region_code: Mapped[str] = mapped_column(String(20), primary_key=True)
+    period: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    species_code: Mapped[str] = mapped_column(String(20), primary_key=True)
+    frequency: Mapped[float] = mapped_column(Float)
+    sample_size: Mapped[int]
+
+
 class Observation(Base):
     """One species reported on one checklist (eBird 'subId')."""
 

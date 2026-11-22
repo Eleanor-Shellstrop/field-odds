@@ -8,7 +8,8 @@ from sqlalchemy import func, select
 from tenacity import stop_after_attempt
 
 from app.ebird import EBirdClient
-from app.models import Observation, PipelineRun, RawResponse
+from app.histogram import period_of
+from app.models import ChecklistFrequency, Observation, PipelineRun, RawResponse
 from app.pipeline import run_job, run_pipeline
 from tests.conftest import BASE_URL, load_fixture
 
@@ -54,6 +55,18 @@ def test_failed_job_is_recorded_and_pipeline_continues(ctx, ebird, monkeypatch):
 
 def test_full_pipeline_then_api(ctx, ebird, api):
     run_job("taxonomy", ctx)
+    period = period_of(ctx.settings.today())
+    ctx.session.add_all(
+        ChecklistFrequency(
+            region_code=ctx.region,
+            period=period,
+            species_code=code,
+            frequency=value,
+            sample_size=100,
+        )
+        for code, value in (("amecro", 0.6), ("baleag", 0.2), ("gulls", 0.4))
+    )
+    ctx.session.commit()
     for name in ("historic_day", "daily_stats", "compute_predictions"):
         assert run_job(name, ctx).status == "success"
 
