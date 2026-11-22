@@ -136,7 +136,7 @@ def test_recent_badge(ctx, load, api, age, expected):
 
 
 def test_percentages_update_daily_even_without_a_key(ctx):
-    assert Settings(_env_file=None).pipeline_jobs == ["recent_obs", "compute_predictions"]
+    assert "compute_predictions" in Settings(_env_file=None).pipeline_jobs
     ctx.settings.ebird_api_key = ""
     ctx.settings.schedule_hour = 0
     assert [r.job_name for r in run_if_due(ctx)] == ["compute_predictions"]

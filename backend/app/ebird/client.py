@@ -87,6 +87,16 @@ class EBirdClient:
         raw = self.get(f"/data/obs/{region}/recent", {"back": back})
         return raw, [EBirdObservation.model_validate(o) for o in raw]
 
+    def notable_observations(
+        self, region: str, back: int = 30
+    ) -> tuple[Any, list[EBirdObservation]]:
+        """Every rare or unusual report, including those not reviewed yet.
+
+        `detail=simple` on purpose: `full` includes observers' names.
+        """
+        raw = self.get(f"/data/obs/{region}/recent/notable", {"back": back, "detail": "simple"})
+        return raw, [EBirdObservation.model_validate(o) for o in raw]
+
     def historic_observations(self, region: str, day: date) -> tuple[Any, list[EBirdObservation]]:
         """Every species reported in the region on `day` (one record per species)."""
         raw = self.get(f"/data/obs/{region}/historic/{day.year}/{day.month}/{day.day}")

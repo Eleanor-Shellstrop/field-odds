@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from app.rarities.status import Status
+
 
 class _Out(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -64,3 +66,47 @@ class PipelineRunOut(_Out):
 class JobOut(BaseModel):
     name: str
     description: str
+
+
+class RarityOut(BaseModel):
+    """Evidence only. Deliberately has no coordinates, ids or chance of finding the bird."""
+
+    species_code: str
+    common_name: str
+    status: Status
+    reason: str | None
+    first_reported: datetime
+    last_reported: datetime
+    outings: int
+    outings_today: int
+    outings_yesterday: int
+    days_reported: int
+    unreviewed: bool
+    hotspots: list[str]
+    area: str | None
+    is_current: bool
+
+
+class RaritiesResponse(BaseModel):
+    region_code: str
+    today: date
+    updated_at: datetime | None
+    counts_through: date | None
+    items: list[RarityOut]
+
+
+class SearchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # so a location can't be slipped in
+
+    species_code: str
+    found: bool
+    searched_at: datetime | None = None  # local time; defaults to now
+
+
+class SearchOut(_Out):
+    id: int
+    species_code: str
+    common_name: str
+    searched_at: datetime
+    found: bool
+    status_then: Status | None

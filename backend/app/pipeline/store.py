@@ -42,7 +42,15 @@ def upsert_locations(session: Session, observations: list[EBirdObservation]) -> 
         if o.loc_id not in latest or o.location_private:
             latest[o.loc_id] = o
     locations = [
-        session.merge(Location(loc_id=loc_id, is_private=o.location_private, lat=o.lat, lng=o.lng))
+        session.merge(
+            Location(
+                loc_id=loc_id,
+                is_private=o.location_private,
+                lat=o.lat,
+                lng=o.lng,
+                public_name=None if o.location_private else o.loc_name,
+            )
+        )
         for loc_id, o in latest.items()
     ]
     label_locations(session, locations)
